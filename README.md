@@ -99,16 +99,20 @@ One thing the simulator taught me: with an election timeout of 60-80 ms, a 50 ms
 
 ## Performance
 
-5 processes on one machine over localhost TCP, every append fsynced. From `./gradlew bench` ([docs/results.md](docs/results.md)):
+5 processes on a MacBook (Apple Silicon, 8 cores) over localhost TCP, with 32 closed-loop clients (each waits for its reply before sending the next). Every log append is fsynced before any reply. From `./gradlew bench` ([docs/results.md](docs/results.md)):
 
-| Configuration | Write throughput | Write p50 | Write p99 | Read p50 | Failover (median / max) |
-|---|---|---|---|---|---|
-| No batching | 1,022 ops/s | 28.2 ms | 79.3 ms | 1.44 ms | 337 / 435 ms |
-| Batching + pipelining | 4,376 ops/s | 5.7 ms | 26.0 ms | 1.47 ms | 209 / 345 ms |
+| Configuration | Write throughput | Write p50 | Write p99 | Read throughput | Read p99 | Failover (median / max) |
+|---|---|---|---|---|---|---|
+| No batching | 122 ops/s | 259.6 ms | 533.5 ms | 64,353 ops/s | 1.37 ms | 339 / 524 ms |
+| Batching + pipelining | 980 ops/s | 31.5 ms | 58.1 ms | 56,605 ops/s | 1.52 ms | 455 / 688 ms |
 
-Measured on a 2-CPU Linux VM with 32 closed-loop clients, so all five nodes and the clients were sharing two cores. On a Mac with more cores the numbers will be higher. Rerun `./gradlew bench` to get yours.
+Writes are limited by the disk, not the CPU. Without batching, the leader does one fsync per write on its single thread and tops out around 120 writes/s, so each flush takes about 8 ms on this machine. With batching, one fsync and one AppendEntries per follower cover every write that arrived while the last flush was running. That gave 8x the throughput and 8x lower median latency. With a fixed number of closed-loop clients, throughput is roughly clients / latency, so the next win is cutting latency (see below).
 
-Batching helps because one fsync and one AppendEntries per follower covers every proposal that arrived together, instead of one of each per write. Failover time is mostly the election timeout: followers wait 150-300 ms without a heartbeat before they start an election.
+For comparison, the same benchmark on a 2-core Linux VM, where fsync is much cheaper, gave 1,022 writes/s without batching and 4,376 with it.
+
+Reads never touch the disk. ReadIndex only needs one heartbeat round to confirm the leader still has a majority, and reads that arrive together share that round.
+
+Failover time is mostly the election timeout: followers wait 150-300 ms without a heartbeat before they start an election. The client then has to find the new leader.
 
 ## Layout
 
@@ -131,7 +135,7 @@ docs/           architecture notes, benchmark results, demo output
 - **No membership changes.** The cluster is fixed at startup.
 - **Client sessions never expire.** Every client ID stays in the dedup table. A real system expires them (the dissertation, §6.3, covers how).
 - **One outstanding request per client.** Dedup only tracks each client's latest sequence number.
-- **fsync on macOS.** `FileChannel.force` doesn't issue `F_FULLFSYNC`, so a power cut on a Mac could lose writes still in the drive's cache. A `kill -9` is fine.
+- **Leader flushes before replicating.** The leader fsyncs its own log and only then sends AppendEntries, so a write waits for two flushes in a row. Raft allows the leader to write to its disk in parallel with sending to followers (dissertation §10.2.1). That would cut write latency roughly in half, and it's the next thing I'd build.
 - **Single-threaded node loop.** Simple and lock-free, but one core per node limits throughput. Moving disk writes off the Raft thread (with care about ordering) would be next.
 
 ## References
