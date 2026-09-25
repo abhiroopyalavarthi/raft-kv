@@ -1,0 +1,80 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'raftkv'
+version = '1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // The Raft core uses only the JDK. HdrHistogram is used by the benchmark only.
+    implementation 'org.hdrhistogram:HdrHistogram:2.2.2'
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'raftkv.Main'
+    applicationName = 'raft-kv'
+    applicationDefaultJvmArgs = ['-Xmx512m']
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:all' << '-Xlint:-serial'
+}
+
+test {
+    useJUnitPlatform()
+    maxHeapSize = '2g'
+    // ./gradlew test -Druns=50000 to run more randomized simulations
+    systemProperty 'runs', System.getProperty('runs', '10000')
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+}
+
+// ./gradlew sim --args="--seeds 1000"
+tasks.register('sim', JavaExec) {
+    group = 'verification'
+    description = 'Runs randomized fault-injection simulations'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'raftkv.Main'
+    args 'sim'
+    maxHeapSize = '2g'
+}
+
+// ./gradlew bench
+tasks.register('bench', JavaExec) {
+    group = 'application'
+    description = 'Starts real 5-node clusters and measures throughput, latency and failover'
+    dependsOn 'installDist'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'raftkv.Main'
+    args 'bench'
+    workingDir = rootDir
+}
+
+// ./gradlew demo
+tasks.register('demo', JavaExec) {
+    group = 'application'
+    description = 'Leader-kill demo on a real 5-process cluster'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'raftkv.Main'
+    args 'demo'
+    workingDir = rootDir
+}

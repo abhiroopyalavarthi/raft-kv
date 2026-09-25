@@ -1,0 +1,24 @@
+[ 0.02s] starting 5 node processes on ports 7101-7105
+[ 1.20s] n2 is leader (pid 4471)
+[ 1.20s] client writing demo-0, demo-1, ... as fast as the cluster acknowledges
+[ 2.20s]   222 writes acknowledged
+[ 3.21s]   621 writes acknowledged
+[ 4.20s]   1,088 writes acknowledged
+[ 4.24s] >>> kill -9 leader n2 (pid 4471)
+[ 4.50s] >>> n4 elected leader 261 ms after the kill
+[ 5.20s]   1,468 writes acknowledged
+[ 6.20s]   2,014 writes acknowledged
+[ 7.21s]   2,616 writes acknowledged
+[ 7.21s] >>> restarting n2 from its data directory
+[ 8.20s]   2,893 writes acknowledged
+[ 9.21s]   3,528 writes acknowledged
+[10.20s]   4,185 writes acknowledged
+[10.21s] writes paused for 280 ms (last ack from old leader -> first ack from new leader)
+[10.39s] >>> n2 caught up: applied index 4188, role FOLLOWER, following n4
+[10.40s] reading back every acknowledged write through the cluster...
+[13.02s] acknowledged writes: 4,186   lost or wrong: 0
+[13.04s]   n1: id=1 role=FOLLOWER term=2 leader=4 commit=4188 applied=4188 lastIndex=4188
+[13.04s]   n2: id=2 role=FOLLOWER term=2 leader=4 commit=4188 applied=4188 lastIndex=4188
+[13.04s]   n3: id=3 role=FOLLOWER term=2 leader=4 commit=4188 applied=4188 lastIndex=4188
+[13.05s]   n4: id=4 role=LEADER term=2 leader=4 commit=4188 applied=4188 lastIndex=4188
+[13.05s]   n5: id=5 role=FOLLOWER term=2 leader=4 commit=4188 applied=4188 lastIndex=4188
